@@ -7,12 +7,12 @@ const jwt = require("jsonwebtoken")
 // const crypto = require("crypto")
 // const kod = crypto.randomBytes(32).toString("hex")
 // console.log("Kód: "+kod)
-require('dotenv').config();
+require("dotenv").config()
 const SECRETKEY= process.env.SECRETKEY
 
 function authenticationToken(req,res,next){
-    const token =   req.headers.authorization
-    console.log("Token", token)
+    const token = req.cookies.token
+    console.log("Token:", req.cookies)
     if (!token) return res.status(401).json({message:"Hozzáférés megtagadva, nincs token!"})
     
     jwt.verify(token, SECRETKEY, (err,user)=>{
@@ -47,7 +47,14 @@ router.post("/signin", async(req,res,next)=>{
         
         if (user && passwordMatch){
             const token = await jwt.sign({id:user.id}, SECRETKEY, {expiresIn:"1h"})
-            const resUser= {...user, accessToken:token}
+            res.cookie('token', token, {
+                httpOnly: true,
+                secure: true,
+                sameSite: "none",
+                maxAge: 3600000
+            })  
+
+            const resUser= {...user}
             delete resUser.password
             res.status(200).json(resUser)
         }
@@ -64,6 +71,26 @@ router.post("/signin", async(req,res,next)=>{
 
 router.get("/secretdata", authenticationToken, async(req,res)=>{
     res.status(200).json({message:"Itt a titok!"})
+})
+
+router.put('/update-profile', authenticationToken, async(req,res)=>{
+    const {address, userName} = req.body
+    try {
+        const updateUser = await users.updateprofile(req.user.id, {address, userName})
+    }
+    catch{
+        res.status(401).send({message:"Hiba a felhasználó frissítésben!"})
+    }
+})
+
+router.post("/logout", authenticationToken, async(req,res)=>{
+    res.cookie('token',token, {
+        httpOnly: true,
+        secure: true,
+        sameSite: "none",
+        expires: new Date(0)
+    })
+    res.status(200).json({message:"Kijelentkezve!"})
 })
 
 module.exports= router
